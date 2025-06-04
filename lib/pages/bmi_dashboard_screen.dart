@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
+import 'dart:async';
 
 class BmiDashboardScreen extends StatefulWidget {
   const BmiDashboardScreen({super.key});
@@ -20,9 +21,12 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
   int weight = 50;
   int age = 20;
   String selectedGender = 'MALE';
+  Timer? _holdTimer;
+  bool _isIncrementing = false;
+  bool _isDecrementing = false;
 
   void calculateBMI() {
-    // Convert  cm to m
+    // Convert cm to m
     double heightInMeters = valueHeight / 100;
 
     // Calculate BMI
@@ -66,7 +70,7 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
                   fontSize: 30,
                   fontWeight: FontWeight.bold,
                 ),
-                20.height,
+                30.height,
                 Container(
                   decoration: BoxDecoration(
                     color: gray,
@@ -83,7 +87,7 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
                     ),
                   ),
                 ),
-                16.height,
+                20.height,
                 Container(
                   color: categoryColor.withOpacity(0.5),
                   child: Padding(
@@ -99,8 +103,7 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
                     ),
                   ),
                 ),
-
-                16.height,
+                20.height,
                 PrimaryText(
                   text: getBMIDescription(category),
                   fontSize: 16,
@@ -114,6 +117,46 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
         );
       },
     );
+  }
+
+  void _startIncrementing(bool isWeight) {
+    _isIncrementing = true;
+    _holdTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
+      if (_isIncrementing) {
+        setState(() {
+          if (isWeight) {
+            weight++;
+          } else {
+            age++;
+          }
+        });
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _startDecrementing(bool isWeight) {
+    _isDecrementing = true;
+    _holdTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
+      if (_isDecrementing) {
+        setState(() {
+          if (isWeight) {
+            if (weight > 0) weight--;
+          } else {
+            if (age > 0) age--;
+          }
+        });
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _stopAction() {
+    _isIncrementing = false;
+    _isDecrementing = false;
+    _holdTimer?.cancel();
   }
 
   //Category Message
@@ -133,11 +176,18 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
   }
 
   @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: appBackgroundColor,
       body: SafeArea(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -208,7 +258,7 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
                             ),
                             SfSlider(
                               min: 0.0,
-                              max: 200.0,
+                              max: 300.0,
                               value: valueHeight,
                               interval: 50,
                               showTicks: true,
@@ -247,6 +297,10 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
                           if (weight > 0) weight--;
                         });
                       },
+                      onAddLongPressStart: () => _startIncrementing(true),
+                      onAddLongPressEnd: () => _stopAction(),
+                      onRemoveLongPressStart: () => _startDecrementing(true),
+                      onRemoveLongPressEnd: () => _stopAction(),
                       title: "Weight(Kg)",
                       valueDisplay: weight.toString(),
                     ),
@@ -263,6 +317,10 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
                           if (age > 0) age--;
                         });
                       },
+                      onAddLongPressStart: () => _startIncrementing(false),
+                      onAddLongPressEnd: () => _stopAction(),
+                      onRemoveLongPressStart: () => _startDecrementing(false),
+                      onRemoveLongPressEnd: () => _stopAction(),
                       title: "Age(Years)",
                       valueDisplay: age.toString(),
                     ),
@@ -288,18 +346,26 @@ class _BmiDashboardScreenState extends State<BmiDashboardScreen> {
 }
 
 class CustomWeightAgeCard extends StatelessWidget {
-  CustomWeightAgeCard({
+  const CustomWeightAgeCard({
     super.key,
     required this.title,
     this.valueDisplay = "",
     required this.onAddTap,
     required this.onRemoveTap,
+    required this.onAddLongPressStart,
+    required this.onAddLongPressEnd,
+    required this.onRemoveLongPressStart,
+    required this.onRemoveLongPressEnd,
   });
 
   final String title;
   final String valueDisplay;
-  final Function() onAddTap;
-  final Function() onRemoveTap;
+  final VoidCallback onAddTap;
+  final VoidCallback onRemoveTap;
+  final VoidCallback onAddLongPressStart;
+  final VoidCallback onAddLongPressEnd;
+  final VoidCallback onRemoveLongPressStart;
+  final VoidCallback onRemoveLongPressEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -326,19 +392,29 @@ class CustomWeightAgeCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      PrimaryCircleButton(
-                        backgroundColor: dimGrey.withOpacity(0.6),
-                        onPressed: onRemoveTap,
-                        icon: Icons.remove,
-                        size: 30,
-                        iconcolor: white,
+                      GestureDetector(
+                        onTap: onRemoveTap,
+                        onLongPressStart: (_) => onRemoveLongPressStart(),
+                        onLongPressEnd: (_) => onRemoveLongPressEnd(),
+                        child: PrimaryCircleButton(
+                          backgroundColor: dimGrey.withOpacity(0.6),
+                          onPressed: onRemoveTap,
+                          icon: Icons.remove,
+                          size: 30,
+                          iconcolor: white,
+                        ),
                       ),
-                      PrimaryCircleButton(
-                        onPressed: onAddTap,
-                        icon: Icons.add,
-                        iconcolor: white,
-                        size: 30,
-                        backgroundColor: lightGrey.withOpacity(0.5),
+                      GestureDetector(
+                        onTap: onAddTap,
+                        onLongPressStart: (_) => onAddLongPressStart(),
+                        onLongPressEnd: (_) => onAddLongPressEnd(),
+                        child: PrimaryCircleButton(
+                          onPressed: onAddTap,
+                          icon: Icons.add,
+                          iconcolor: white,
+                          size: 30,
+                          backgroundColor: lightGrey.withOpacity(0.5),
+                        ),
                       ),
                     ],
                   ),
@@ -353,11 +429,6 @@ class CustomWeightAgeCard extends StatelessWidget {
 }
 
 class GenderCard extends StatelessWidget {
-  final String imageUrl;
-  final String title;
-  final Function() ontap;
-  final bool isSelected;
-
   const GenderCard({
     super.key,
     required this.imageUrl,
@@ -365,6 +436,11 @@ class GenderCard extends StatelessWidget {
     required this.ontap,
     this.isSelected = false,
   });
+
+  final String imageUrl;
+  final String title;
+  final VoidCallback ontap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
